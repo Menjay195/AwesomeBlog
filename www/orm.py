@@ -11,15 +11,24 @@ def create_pool(loop,**kw):
     __pool = yield from aiomysql.create_pool(
         host = kw.get('host','localhost'),
         port = kw.get('port',3306),
-        user = kw['user'],
-        password = kw['password'],
-        db = kw['db'],
+        user = kw.get('user'),
+        password = kw.get('password'),
+        db = kw.get('db'),
         charset = kw.get('charset','utf8'),
         autocommit = kw.get('autocommit',10),
         maxsize = kw.get('maxsize',10),
         minsize = kw.get('minsize',1),
         loop = loop
     )
+
+
+@asyncio.coroutine
+def destory_pool():
+    global __pool
+    if __pool is not None :
+        __pool.close()
+        yield from __pool.wait_closed()
+
 
 def log(sql, args=()):
     logging.info('SQL: %s' % sql)
@@ -42,10 +51,13 @@ def select(sql,args,size = None):
 @asyncio.coroutine
 def execute(sql,args):
     log(sql)
+    # print(args)
     with (yield from __pool) as conn:
         try:
             cur = yield from conn.cursor()
-            yield from cur.excute(sql.replace('?','%s'),args)
+            sql = sql.replace('?','%s')
+            # print(sql)
+            yield from cur.execute(sql,args)
             affected = cur.rowcount
             yield from cur.close()
         except BaseException as e:
@@ -56,7 +68,7 @@ def create_args_string(num):
     L = []
     for n in range(num):
         L.append('?')
-        return ','.join(L)
+    return ','.join(L)
 # # --------------------------------------------
 
 
@@ -67,36 +79,47 @@ class ModelMetaclass(type):
 
         if name == 'Model':
             return type.__new__(cls,name,bases,attrs)
-
         tableName = attrs.get('__table__',None) or name
+        # print(attrs)    #{'__module__': 'models', '__qualname__': 'User', '__table__': 'users', 'id': <orm.StringField object at 0x>, 'email': <>, 'passwd': <>, 'admin': <>, 'name': <>, 'image': <>, 'created_at': <>}
         logging.info('found model:%s(table:%s)'%(name,tableName))
 
         mappings = dict()
         fields = []
         primaryKey = None
         for k,v in attrs.items():
-            if isinstance(v,Field):
+            if isinstance(v,Field):     #滤掉{'__module__': 'models'},{ '__qualname__': 'User'},{ '__table__': 'users'}
+                # print(k,v,'YES')
                 logging.info('found mapping:%s ==> %s'%(k,v))
                 mappings[k] = v
-                if v.primary_key:
+                if v.primary_key:       #选出{ 'id': <orm.StringField object at 0x…>}
                     if primaryKey:
                         raise RuntimeError('Duplicate primary key for field: %s' % k)
-                    primaryKey = k
-                else:
+                    primaryKey = k      #id
+                else:                   #滤掉{'id': <orm.StringField object at 0x…}
                     fields.append(k)
+        # print(mappings)    #{'id': <orm.StringField object at 0x>, 'email': <>, 'passwd': <>, 'admin': <>, 'name': <>, 'image': <>, 'created_at': <>}
+        # print(fields)      #{'email': <>, 'passwd': <>, 'admin': <>, 'name': <>, 'image': <>, 'created_at': <>}
+
         if not primaryKey:
             raise RuntimeError('Primary key not found.')
         for k in mappings.keys():
-            attrs.pop(k)
+            attrs.pop(k)                 #{'__module__': 'models', '__qualname__': '', '__table__': ''}
+
         escaped_fields = list(map(lambda f:'`%s`'%f,fields))
+        # print(escaped_fields)          # ['`email`', '`passwd`', '`admin`', '`name`', '`image`', '`created_at`']
         attrs['__mappings__'] = mappings
         attrs['__table__'] = tableName
         attrs['__primary_key__'] = primaryKey
         attrs['__fields__'] = fields
         attrs['__select__'] = 'select `%s`, %s from `%s`' % (primaryKey, ', '.join(escaped_fields), tableName)
+        print(attrs['__select__'])       #select `id`, `email`, `passwd`, `admin`, `name`, `image`, `created_at` from `users`
         attrs['__insert__'] = 'insert into `%s` (%s, `%s`) values (%s)' % (tableName, ', '.join(escaped_fields), primaryKey, create_args_string(len(escaped_fields) + 1))
+        print(attrs['__insert__'])      #insert into `users` (`email`, `passwd`, `admin`, `name`, `image`, `created_at`, `id`) values (?,?,?,?,?,?,?)
         attrs['__update__'] = 'update `%s` set %s where `%s`=?' % (tableName, ', '.join(map(lambda f: '`%s`=?' % (mappings.get(f).name or f), fields)), primaryKey)
+        print(attrs['__update__'])      #update `users` set `email`=?, `passwd`=?, `admin`=?, `name`=?, `image`=?, `created_at`=? where `id`=?
         attrs['__delete__'] = 'delete from `%s` where `%s`=?' % (tableName, primaryKey)
+        print(attrs['__delete__'])      #delete from `users` where `id`=?
+        print('-----------------------------------------------------------')
         return type.__new__(cls, name, bases, attrs)
 
 
@@ -118,14 +141,15 @@ class Model(dict,metaclass=ModelMetaclass):                    # 从dict类继�
         return getattr(self,key,None)
 
     def getValueOrDefault(self,key):
-        value = getattr(self,key,None)
-        if value is None:
-            field = self.__mappings__[key]
+        value = getattr(self,key,None)                 #主键没有值，为None
+        # print(value)
+        if value is None:                             #选出值为None的主键
+            field = self.__mappings__[key]             #确定mapping字典中主键的value，形如<orm.StringField object at 0x…>
             if field.default is not None:
                 value = field.default() if callable(field.default) else field.default
                 logging.debug('using default value for %s: %s' % (key, str(value)))
-                setattr(self,key,value)
-            return value
+                setattr(self,key,value)                #继承的dict方法，等价于``self.key = value''
+        return value                                  #有值的都直接返回
 
     @classmethod
     @asyncio.coroutine
@@ -137,9 +161,14 @@ class Model(dict,metaclass=ModelMetaclass):                    # 从dict类继�
 
     @asyncio.coroutine
     def save(self):
+        print('run save()………………………………')
+        # print(self.__fields__)
         args = list(map(self.getValueOrDefault,self.__fields__))
+        # print(args)
         args.append(self.getValueOrDefault(self.__primary_key__))
+        # print(args)
         rows = yield from execute(self.__insert__,args)
+        # print(rows)             #并没有得到输出
         if rows != 1:
             logging.warning('failed to insert record: affected rows: %s' % rows)
 
