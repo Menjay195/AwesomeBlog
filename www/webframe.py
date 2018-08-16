@@ -162,7 +162,7 @@ class RequestHandler(object):
         try:
             r = yield from self._func(**kw)
             return r
-        except APIError as e:
+        except APIError as e:                                                   #highlight APIError
             return dict(error=e.error, data=e.data, message=e.message)
 
 
