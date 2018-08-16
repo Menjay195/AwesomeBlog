@@ -108,7 +108,7 @@ def data_factory(app, handler):
 # ----------------------------------------------------------------------------
 
 
-def datetime_filter(t):
+def datetime_filter(t):                                 #用于渲染时间显示
     delta = int(time.time() - t)
     if delta < 60:
         return u'1分钟前'
@@ -135,7 +135,7 @@ def init(loop):
 
     app = web.Application(loop=loop,middlewares=[logger_factory,response_factory])
 
-    init_jinja2(app,filters=dict(datetime=datetime_filter))
+    init_jinja2(app,filters=dict(datetime=datetime_filter))              #初始化
 
     # app.router.add_route('GET','/',index)
     add_routes(app,'handlers')
