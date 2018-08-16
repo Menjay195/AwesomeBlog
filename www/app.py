@@ -13,33 +13,6 @@ import orm
 from webframe import add_routes,add_static
 
 
-# def index(request):
-#     return web.Response(body=b'<h1>Awesome</h1>',content_type='text/html')
-
-
-@asyncio.coroutine
-def init(loop):
-
-    yield from orm.create_pool(loop=loop, host='127.0.0.1', port=3306, user='www', password='www', db='awesome')
-
-    app = web.Application(loop=loop,middlewares=[logger_factory,response_factory])
-
-    init_jinja2(app,filters=dict(datetime=datetime_filter))
-
-    # app.router.add_route('GET','/',index)
-    add_routes(app,'handlers')
-    add_static(app)
-
-    srv = yield from loop.create_server(app.make_handler(),'127.0.0.1',9000)
-    logging.info('sever started at http://127.0.0.1:9000')
-    return srv
-
-
-loop = asyncio.get_event_loop()
-loop.run_until_complete(init(loop))
-loop.run_forever()
-
-
 # ----------------------------------------------------------------------------
 
 
@@ -149,3 +122,30 @@ def datetime_filter(t):
     return u'%s年%s月%s日' % (dt.year, dt.month, dt.day)
 
 
+# ----------------------------------------------------------------------------
+
+
+# def index(request):
+#     return web.Response(body=b'<h1>Awesome</h1>',content_type='text/html')
+
+@asyncio.coroutine
+def init(loop):
+
+    yield from orm.create_pool(loop=loop, host='127.0.0.1', port=3306, user='www-data', password='www-data', db='awesome')
+
+    app = web.Application(loop=loop,middlewares=[logger_factory,response_factory])
+
+    init_jinja2(app,filters=dict(datetime=datetime_filter))
+
+    # app.router.add_route('GET','/',index)
+    add_routes(app,'handlers')
+    add_static(app)
+
+    srv = yield from loop.create_server(app.make_handler(),'127.0.0.1',9000)
+    logging.info('sever started at http://127.0.0.1:9000')
+    return srv
+
+
+loop = asyncio.get_event_loop()
+loop.run_until_complete(init(loop))
+loop.run_forever()
