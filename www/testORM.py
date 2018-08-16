@@ -9,8 +9,10 @@ def testOrm(loop):
     yield from orm.create_pool(loop=loop,user='www-data', password='www-data', db='awesome')
 
     u = User(name='Test', email='test@example.com', passwd='1234567890', image='about:blank')
+    v = User(name='Haha', email='haha@haha.com', passwd='567890', image='about:haha')
     # print(u.name,u.email,u.passwd,u.image)
     yield from u.save()
+    yield from v.save()
     yield from orm.destory_pool()
 
 
