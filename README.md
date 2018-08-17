@@ -1,4 +1,8 @@
 测试程序：
 python3 app.py
 
-![Image text](https://github.com/Menjay195/AwesomeBlog/blob/day09/SamplePictures/api-users.JPG)
+登录前：
+![Image text](https://github.com/Menjay195/AwesomeBlog/blob/day10/SamplePictures/before_signin.JPG)
+
+登录后：
+![Image text](https://github.com/Menjay195/AwesomeBlog/blob/day10/SamplePictures/after_signin.JPG)
