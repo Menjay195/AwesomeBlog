@@ -6,9 +6,11 @@ from webframe import get, post
 
 from models import User, Comment, Blog, next_id
 
-
+from aiohttp import web
+from apis import APIError,APIValueError, APIResourceNotFoundError,APIPermissionError
 
 # -----------------------------------------------------------------------------------
+
 
 from config import configs
 
@@ -58,6 +60,15 @@ def cookie2user(cookie_str):
     except Exception as e:
         logging.exception(e)
         return None
+
+# -----------------------------------------------------------------------------------
+
+
+def check_admin(request):
+    if request.__user__ is None or not request.__user__.admin:
+        raise APIPermissionError()
+
+
 # ----------------------------------------------------------------------------------
 
 
@@ -98,9 +109,6 @@ def index(request):
 #         u.passwd = '******'
 #     return dict(users=users)
 
-
-from aiohttp import web
-from apis import APIError,APIValueError, APIResourceNotFoundError
 
 @get('/register')                                          #注册页面
 @asyncio.coroutine
@@ -182,3 +190,27 @@ def signout(request):
     r.set_cookie(COOKIE_NAME, '-deleted-', max_age=0, httponly=True)
     logging.info('user signed out.')
     return r
+
+
+@post('/api/blogs')                                                   #创建博客功能接口
+@asyncio.coroutine
+def api_create_blog(request, *, name, summary, content):
+    check_admin(request)
+    if not name or not name.strip():
+        raise APIValueError('name', 'name cannot be empty.')
+    if not summary or not summary.strip():
+        raise APIValueError('summary', 'summary cannot be empty.')
+    if not content or not content.strip():
+        raise APIValueError('content', 'content cannot be empty.')
+    blog = Blog(user_id=request.__user__.id, user_name=request.__user__.name, user_image=request.__user__.image, name=name.strip(), summary=summary.strip(), content=content.strip())
+    yield from blog.save()
+    return blog
+
+
+@get('/manage/blogs/create')                                          #管理员创建博客页面
+def manage_create_blog():
+    return {
+        '__template__': 'manage_blog_edit.html',
+        'id': '',
+        'action': '/api/blogs'
+    }
