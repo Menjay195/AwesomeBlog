@@ -50,7 +50,8 @@ def logger_factory(app,handler):
     return logger
 
 
-from handlers import cookie2user, COOKIE_NAME                     #add in day10
+
+from handlers import cookie2user, COOKIE_NAME
 
 @asyncio.coroutine                                                 #add in day10
 def auth_factory(app, handler):
@@ -71,6 +72,8 @@ def auth_factory(app, handler):
             return web.HTTPFound('/signin')
         return (yield from handler(request))
     return auth
+
+
 
 @asyncio.coroutine
 def response_factory(app,handler):
