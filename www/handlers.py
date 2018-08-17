@@ -7,7 +7,7 @@ from webframe import get, post
 from models import User, Comment, Blog, next_id
 
 from aiohttp import web
-from apis import APIError,APIValueError, APIResourceNotFoundError,APIPermissionError
+from apis import APIError,APIValueError, APIResourceNotFoundError,APIPermissionError,Page
 
 # -----------------------------------------------------------------------------------
 
@@ -67,6 +67,19 @@ def cookie2user(cookie_str):
 def check_admin(request):
     if request.__user__ is None or not request.__user__.admin:
         raise APIPermissionError()
+
+
+# ----------------------------------------------------------------------------------
+
+def get_page_index(page_str):
+    p = 1
+    try:
+        p = int(page_str)
+    except ValueError as e:
+        pass
+    if p < 1:
+        p = 1
+    return p
 
 
 # ----------------------------------------------------------------------------------
@@ -213,4 +226,23 @@ def manage_create_blog():
         '__template__': 'manage_blog_edit.html',
         'id': '',
         'action': '/api/blogs'
+    }
+
+
+@get('/api/blogs')                                                     #获取博客功能接口
+def api_blogs(*, page='1'):
+    page_index = get_page_index(page)
+    num = yield from Blog.findNumber('count(id)')
+    p = Page(num, page_index)
+    if num == 0:
+        return dict(page=p, blogs=())
+    blogs = yield from Blog.findAll(orderBy='created_at desc', limit=(p.offset, p.limit))
+    return dict(page=p, blogs=blogs)
+
+
+@get('/manage/blogs')                                                  #管理员管理博客页面
+def manage_blogs(*, page='1'):
+    return {
+        '__template__': 'manage_blogs.html',
+        'page_index': get_page_index(page)
     }
